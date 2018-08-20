@@ -5,39 +5,40 @@ import os
 import click
 from tabulate import tabulate
 
-from mlflow.store import file_store
+from mlflow.data import is_uri
+from mlflow.tracking import _get_store
 
 
 @click.group("experiments")
 def commands():
-    """Tracking APIs."""
+    """Manage experiments."""
     pass
 
 
 @commands.command()
-@click.option("--file-store-path", default=None,
-              help="The root of the backing file store for experiment and run data. Defaults to %s."
-                   % file_store._default_root_dir())
 @click.argument("experiment_name")
-def create(file_store_path, experiment_name):
+@click.option("--artifact-location", "-l",
+              help="Base location for runs to store artifact results. Artifacts will be stored "
+                   "at $artifact_location/$run_id/artifacts. See "
+                   "https://mlflow.org/docs/latest/tracking.html#where-runs-get-recorded for "
+                   "more info on the properties of artifact location. "
+                   "If no location is provided, the tracking server will pick a default.")
+def create(experiment_name, artifact_location):
     """
-    Creates a new experiment in FileStore backend.
+    Creates a new experiment in the configured tracking server.
     """
-    fs = file_store.FileStore(file_store_path)
-    exp_id = fs.create_experiment(experiment_name)
-    print("Created experiment '%s' with id '%d'" % (experiment_name, exp_id))
+    store = _get_store()
+    exp_id = store.create_experiment(experiment_name, artifact_location)
+    print("Created experiment '%s' with id %d" % (experiment_name, exp_id))
 
 
 @commands.command("list")
-@click.option("--file-store-path", default=None,
-              help="The root of the backing file store for experiment and run data. Defaults to %s."
-                   % file_store._default_root_dir())
-def list_experiments(file_store_path):
+def list_experiments():
     """
-    List all experiment in FileStore backend.
+    List all experiments in the configured tracking server.
     """
-    fs = file_store.FileStore(file_store_path)
-    experiments = fs.list_experiments()
-    table = [[exp.experiment_id, exp.name, os.path.abspath(exp.artifact_location)]
-             for exp in experiments]
+    store = _get_store()
+    experiments = store.list_experiments()
+    table = [[exp.experiment_id, exp.name, exp.artifact_location if is_uri(exp.artifact_location)
+              else os.path.abspath(exp.artifact_location)] for exp in experiments]
     print(tabulate(sorted(table), headers=["Experiment Id", "Name", "Artifact Location"]))

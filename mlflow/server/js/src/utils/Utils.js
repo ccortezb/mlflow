@@ -25,14 +25,13 @@ class Utils {
 
   static formatMetric(value) {
     if (Math.abs(value) < 10) {
-      return Math.round(value * 1000) / 1000;
+      return (Math.round(value * 1000) / 1000).toString();
     } else if (Math.abs(value) < 100) {
-      return Math.round(value * 100) / 100;
+      return (Math.round(value * 100) / 100).toString();
     } else {
-      return Math.round(value * 10) / 10;
+      return (Math.round(value * 10) / 10).toString();
     }
   }
-
 
   /**
    * We need to cast all of the timestamps back to numbers since keys of JS objects are auto casted
@@ -46,8 +45,8 @@ class Utils {
       return {
         ...metric,
         timestamp: Number.parseFloat(metric.timestamp),
-      }
-    })
+      };
+    });
   }
 
   /**
@@ -66,15 +65,15 @@ class Utils {
    */
   static formatDuration(duration) {
     if (duration < 500) {
-      return duration + "ms"
+      return duration + "ms";
     } else if (duration < 1000 * 60) {
-      return (duration / 1000).toFixed(1) + "s"
+      return (duration / 1000).toFixed(1) + "s";
     } else if (duration < 1000 * 60 * 60) {
-      return (duration / 1000 / 60).toFixed(1) + "min"
-    } else if (duration < 1000 * 60 * 60 * 60) {
-      return (duration / 1000 / 60 / 60).toFixed(1) + "h"
+      return (duration / 1000 / 60).toFixed(1) + "min";
+    } else if (duration < 1000 * 60 * 60 * 24) {
+      return (duration / 1000 / 60 / 60).toFixed(1) + "h";
     } else {
-      return (duration / 1000 / 60 / 60 / 24).toFixed(1) + "days"
+      return (duration / 1000 / 60 / 60 / 24).toFixed(1) + "d";
     }
   }
 
@@ -88,7 +87,11 @@ class Utils {
   }
 
   static dropExtension(path) {
-    return path.replace(/\.[^/.]+$/, "")
+    return path.replace(/(.*[^/])\.[^/.]+$/, "$1");
+  }
+
+  static getGitHubRegex() {
+    return /[@/]github.com[:/]([^/.]+)\/([^/.]+)/;
   }
 
   static renderSource(run) {
@@ -97,8 +100,7 @@ class Utils {
       if (run.entry_point && run.entry_point !== "main") {
         res += ":" + run.entry_point;
       }
-      const GITHUB_RE = /[:@]github.com[:/]([^/.]+)\/([^/.]+)/;
-      const match = run.source_name.match(GITHUB_RE);
+      const match = run.source_name.match(Utils.getGitHubRegex());
       if (match) {
         const url = "https://github.com/" + match[1] + "/" + match[2];
         res = <a href={url}>{res}</a>;
@@ -113,12 +115,13 @@ class Utils {
     if (run.source_version) {
       const shortVersion = run.source_version.substring(0, 6);
       if (run.source_type === "PROJECT") {
-        const GITHUB_RE = /[:@]github.com[:/]([^/.]+)\/([^/.]+)/;
-        const match = run.source_name.match(GITHUB_RE);
+        const match = run.source_name.match(Utils.getGitHubRegex());
         if (match) {
-          const url = "https://github.com/" + match[1] + "/" + match[2] + "/tree/" + run.source_version;
+          const url = ("https://github.com/" + match[1] + "/" + match[2] + "/tree/" +
+            run.source_version);
           return <a href={url}>{shortVersion}</a>;
         }
+        return shortVersion;
       } else {
         return shortVersion;
       }

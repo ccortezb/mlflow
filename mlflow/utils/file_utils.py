@@ -1,9 +1,12 @@
+import gzip
 import os
 import shutil
+import tarfile
 import tempfile
+
 import yaml
 
-from mlflow.entities.file_info import FileInfo
+from mlflow.entities import FileInfo
 
 
 def is_directory(name):
@@ -98,6 +101,16 @@ def mkdir(root, name=None):  # noqa
         raise e
 
 
+def make_containing_dirs(path):
+    """
+    Create the base directory for a given file path if it does not exist; also creates parent
+    directories.
+    """
+    dir_name = os.path.dirname(path)
+    if not os.path.exists(dir_name):
+        os.makedirs(dir_name)
+
+
 def write_yaml(root, file_name, data, overwrite=False):
     """
     Write dictionary data in yaml format.
@@ -118,7 +131,7 @@ def write_yaml(root, file_name, data, overwrite=False):
 
     try:
         with open(yaml_file_name, 'w') as yaml_file:
-            yaml.dump(data, yaml_file, default_flow_style=False)
+            yaml.safe_dump(data, yaml_file, default_flow_style=False, allow_unicode=True)
     except Exception as e:
         raise e
 
@@ -135,16 +148,13 @@ def read_yaml(root, file_name):
     if not exists(root):
         raise Exception("Cannot read '%s'. Parent dir '%s' does not exist." % (file_name, root))
 
-    if not file_name.endswith(".yaml"):
-        raise Exception("File '%s' is expected to have '.yaml' extension" % file_name)
-
     file_path = os.path.join(root, file_name)
     if not exists(file_path):
         raise Exception("Yaml file '%s' does not exist." % file_path)
 
     try:
         with open(file_path, 'r') as yaml_file:
-            return yaml.load(yaml_file)
+            return yaml.safe_load(yaml_file)
     except Exception as e:
         raise e
 
@@ -170,11 +180,12 @@ class TempDir(object):
             self._dir = None
         if self._remove and os.path.exists(self._path):
             shutil.rmtree(self._path)
+
         assert not self._remove or not os.path.exists(self._path)
         assert os.path.exists(os.getcwd())
 
     def path(self, *path):
-        return os.path.join(*path) if self._chdr else os.path.join(self._path, *path)
+        return os.path.join("./", *path) if self._chdr else os.path.join(self._path, *path)
 
 
 def read_file(parent_path, file_name):
@@ -228,3 +239,58 @@ def write_to(filename, data):
 def append_to(filename, data):
     with open(filename, "a") as handle:
         handle.write(data)
+
+
+def make_tarfile(output_filename, source_dir, archive_name, exclude=lambda _: False):
+    # Helper for filtering out modification timestamps
+    def _filter_timestamps(tar_info):
+        tar_info.mtime = 0
+        return tar_info
+    unzipped_filename = tempfile.mktemp()
+    try:
+        with tarfile.open(unzipped_filename, "w") as tar:
+            tar.add(source_dir, arcname=archive_name, filter=_filter_timestamps, exclude=exclude)
+        # When gzipping the tar, don't include the tar's filename or modification time in the
+        # zipped archive (see https://docs.python.org/3/library/gzip.html#gzip.GzipFile)
+        with gzip.GzipFile(filename="", fileobj=open(output_filename, 'wb'), mode='wb', mtime=0)\
+                as gzipped_tar, open(unzipped_filename, 'rb') as tar:
+            gzipped_tar.write(tar.read())
+    finally:
+        os.remove(unzipped_filename)
+
+
+def _copy_project(src_path, dst_path=""):
+    """
+    Internal function used to copy MLflow project during development.
+
+    Copies the content of the whole directory tree except patterns defined in .dockerignore.
+    The MLflow is assumed to be accessible as a local directory in this case.
+
+
+    :param dst_path: MLflow will be copied here
+    :return: name of the MLflow project directory
+    """
+
+    def _docker_ignore(mlflow_root):
+        docker_ignore = os.path.join(mlflow_root, '.dockerignore')
+        patterns = []
+        if os.path.exists(docker_ignore):
+            with open(docker_ignore, "r") as f:
+                patterns = [x.strip() for x in f.readlines()]
+
+        def ignore(_, names):
+            import fnmatch
+            res = set()
+            for p in patterns:
+                res.update(set(fnmatch.filter(names, p)))
+            return list(res)
+
+        return ignore if patterns else None
+
+    mlflow_dir = "mlflow-project"
+    # check if we have project root
+    assert os.path.isfile(os.path.join(src_path, "setup.py")), "file not found " + str(
+        os.path.abspath(os.path.join(src_path, "setup.py")))
+    shutil.copytree(src_path, os.path.join(dst_path, mlflow_dir),
+                    ignore=_docker_ignore(src_path))
+    return mlflow_dir

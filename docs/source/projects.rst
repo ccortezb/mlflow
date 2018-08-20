@@ -7,6 +7,10 @@ An MLflow Project is a format for packaging data science code in a reusable and 
 based primarily on conventions. In addition, the Projects component includes an API and command-line
 tools for running projects, making it possible to chain together projects into workflows.
 
+.. contents:: Table of Contents
+  :local:
+  :depth: 1
+
 Overview
 --------
 
@@ -24,7 +28,10 @@ Name
 Dependencies
     Libraries needed to run the project. MLflow currently uses the
     `Conda <https://conda.io/docs>`_ package manager, which supports both Python packages and native
-    libraries (for example, CuDNN or Intel MKL), to specify dependencies.
+    libraries (for example, CuDNN or Intel MKL), to specify dependencies. MLflow will use the
+    conda installation given by the ``MLFLOW_CONDA_HOME`` environment variable if specified
+    (e.g. running conda commands by invoking "$MLFLOW_CONDA_HOME/bin/conda"), and default to
+    running "conda" otherwise.
 
 Entry Points
     Commands that can be executed within the project, and information about their
@@ -53,9 +60,10 @@ By default, any Git repository or local directory is treated as a project, and M
 following conventions to determine its parameters:
 
 * The project's name is the name of the directory.
-* The Conda environment is specified in ``conda.yaml``, if present.
 * The `Conda environment <https://conda.io/docs/user-guide/tasks/manage-environments.html#create-env-file-manually>`_
-  is specified in ``conda.yaml``, if present.
+  is specified in ``conda.yaml``, if present. If no ``conda.yaml`` file is present, MLflow
+  will use a conda environment containing only Python (specifically, the latest Python available to
+  conda) when running the project.
 * Any ``.py`` and ``.sh`` file in the project can be an entry point, with no parameters explicitly
   declared. When you execute such a command with a set of parameters, MLflow will pass each
   parameter on the command line using ``--key value`` syntax.
@@ -144,13 +152,15 @@ uri
 Running Projects
 ----------------
 
-MLflow provides two simple ways to run projects: the ``mlflow run`` `command-line tool <cli>`_, or
+MLflow provides two simple ways to run projects: the ``mlflow run`` :ref:`command-line tool <cli>`, or
 the :py:func:`mlflow.run` Python API. Both tools take the following parameters:
 
 Project URI
     Can be either a directory on the local file system or a Git repository path,
     specified as a URI of the form ``https://<repo>`` (to use HTTPS) or ``user@host:path``
-    (to use Git over SSH).
+    (to use Git over SSH). To run against an MLproject file located in a subdirectory of the project, 
+    add a '#' to the end of the URI argument, followed by the relative path from the project's root directory
+    to the subdirectory containing the desired project.
 
 Project Version
     Which commit in the Git repository to run, for Git-based projects.
@@ -172,12 +182,12 @@ Deployment Mode
     command (for example, submit a script that does ``mlflow run`` to a standard job queueing system).
 
 For example, in the tutorial we create and publish a MLproject which trains a linear model. The
-project is also published on Github at https://github.com/databricks/mlflow-example. To execute
+project is also published on GitHub at https://github.com/mlflow/mlflow-example. To execute
 this project run
 
 .. code::
 
-    mlflow run git@github.com:databricks/mlflow-example.git -P alpha=0.5
+    mlflow run git@github.com:mlflow/mlflow-example.git -P alpha=0.5
 
 There are also additional options for disabling the creation of a Conda environment, which can be
 useful if you quickly want to test a project in your existing shell environment.
@@ -186,12 +196,8 @@ useful if you quickly want to test a project in your existing shell environment.
 
 Remote Execution on Databricks
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Prerequisites
-~~~~~~~~~~~~~
-Install and configure the `Databricks CLI <https://github.com/databricks/databricks-cli>`_ with
-credentials for your Databricks deployment. Running on Databricks also requires a custom Spark
-image - please contact Databricks if interested.
+Support for running projects on Databricks will be released soon -
+`sign up here <http://databricks.com/mlflow>`_ to receive updates.
 
 
 Launching a Run
@@ -202,7 +208,7 @@ Then, run your project via
 
 ``mlflow run <uri> -m databricks --cluster-spec <path>``
 
-Note that ``<uri>`` must be a Git URI. You can also pass Git credentials via the
+``<uri>`` must be a Git repository URI. You can also pass Git credentials via the
 ``git-username`` and ``git-password`` arguments (or via the ``MLFLOW_GIT_USERNAME`` and
 ``MLFLOW_GIT_PASSWORD`` environment variables).
 
@@ -219,25 +225,17 @@ Building Multi-Step Workflows
 
 The :py:func:`mlflow.run` API, combined with :py:mod:`mlflow.tracking`, makes it possible to build
 multi-step workflows with separate projects (or entry points in the same project) as the individual
-steps. Each call to :py:func:`mlflow.run` will return a Run ID, which you can use with
-:py:mod:`mlflow.tracking` to determine when the run has ended and get its output artifacts. These
+steps. Each call to :py:func:`mlflow.run` returns a run ID, which you can use with
+:py:mod:`mlflow.tracking` to determine when the run has ended and get its output artifacts. These artifacts
 can then be passed into another step that takes ``path`` or ``uri`` parameters. You can coordinate
 all of the workflow in a single Python program that looks at the results of each step and decides
-what to submit next using custom code.
+what to submit next using custom code. Some example uses cases for multi-step workflows include:
 
-Some example uses cases for multi-step workflows include:
+Modularizing Your Data Science Code
+  Different users can publish reusable steps for data featurization, training, validation, and so on, that other users or team can run in their workflows. Because MLflow supports Git versioning, another team can lock their workflow to a specific version of a project, or upgrade to a new one on their own schedule.
 
-**Modularizing Your Data Science Code:** Different users can publish reusable steps for data
-featurization, training, validation, and so on, that other users or team can run in their workflows.
-Thanks to MLflow's support for Git versioning, another team can lock their workflow to a specific
-version of a project, or upgrade to a new one on their own schedule.
+Hyperparameter Tuning
+  Using :py:func:`mlflow.run` you can launch multiple runs in parallel either on the local machine or on a cloud platform like Databricks. Your driver program can then inspect the metrics from each run in real time to cancel runs, launch new ones, or select the best performing run on a target metric.
 
-**Hyperparameter Tuning:** Using :py:func:`mlflow.run`, you can launch multiple runs in parallel
-either on the local machine or on a cloud platform like Databricks. Your driver program can then
-inspect the metrics from each run in real time to cancel runs, launch new ones, or select the best
-performing run on a target metric.
-
-**Cross-validation:** Sometimes, you want to run the same training code on different random splits
-of training and validation data. With MLflow Projects, you can package the project in a way that
-allows this, for example, by taking a random seed for the train/validation split as a parameter, or by
-calling another project first that can split the input data.
+Cross-validation
+  Sometimes you want to run the same training code on different random splits of training and validation data. With MLflow Projects, you can package the project in a way that allows this, for example, by taking a random seed for the train/validation split as a parameter, or by calling another project first that can split the input data.

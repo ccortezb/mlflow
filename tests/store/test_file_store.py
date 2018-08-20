@@ -4,7 +4,7 @@ import time
 import unittest
 import uuid
 
-from mlflow.entities.experiment import Experiment
+from mlflow.entities import Experiment, Metric, Param
 from mlflow.store.file_store import FileStore
 from mlflow.utils.file_utils import write_yaml
 from tests.helper_functions import random_int, random_str
@@ -95,7 +95,7 @@ class TestFileStore(unittest.TestCase):
         file_store = FileStore(self.test_root)
         try:
             file_store._check_root_dir()
-        except Exception as e:  # noqa
+        except Exception as e:  # pylint: disable=broad-except
             self.fail("test_valid_root raised exception '%s'" % e.message)
 
         # Test removing root
@@ -143,6 +143,13 @@ class TestFileStore(unittest.TestCase):
 
     def test_create_experiment(self):
         fs = FileStore(self.test_root)
+
+        # Error cases
+        with self.assertRaises(Exception):
+            fs.create_experiment(None)
+        with self.assertRaises(Exception):
+            fs.create_experiment("")
+
         next_id = max(self.experiments) + 1
         name = random_str(25)  # since existing experiments are 10 chars long
         created_id = fs.create_experiment(name)
@@ -243,20 +250,27 @@ class TestFileStore(unittest.TestCase):
                     self.assertEqual(param.key, param_name)
                     self.assertEqual(param.value, param_value)
 
-    def test_list_artifacts(self):
-        fs = FileStore(self.test_root)
-        # replace with test with code is implemented
-        with self.assertRaises(Exception):
-            self.assertIsNotNone(fs.list_artifacts("random uuid", "some relative path"))
-
-    def test_get_artifact(self):
-        fs = FileStore(self.test_root)
-        # replace with test with code is implemented
-        with self.assertRaises(Exception):
-            self.assertIsNotNone(fs.get_artifact("random uuid", "some relative path"))
-
     def test_search_runs(self):
         # replace with test with code is implemented
         fs = FileStore(self.test_root)
         # Expect 2 runs for each experiment
         assert len(fs.search_runs([self.experiments[0]], [])) == 2
+
+    def test_weird_param_names(self):
+        WEIRD_PARAM_NAME = "this is/a weird/but valid param"
+        fs = FileStore(self.test_root)
+        run_uuid = self.exp_data[0]["runs"][0]
+        fs.log_param(run_uuid, Param(WEIRD_PARAM_NAME, "Value"))
+        param = fs.get_param(run_uuid, WEIRD_PARAM_NAME)
+        assert param.key == WEIRD_PARAM_NAME
+        assert param.value == "Value"
+
+    def test_weird_metric_names(self):
+        WEIRD_METRIC_NAME = "this is/a weird/but valid metric"
+        fs = FileStore(self.test_root)
+        run_uuid = self.exp_data[0]["runs"][0]
+        fs.log_metric(run_uuid, Metric(WEIRD_METRIC_NAME, 10, 1234))
+        metric = fs.get_metric(run_uuid, WEIRD_METRIC_NAME)
+        assert metric.key == WEIRD_METRIC_NAME
+        assert metric.value == 10
+        assert metric.timestamp == 1234

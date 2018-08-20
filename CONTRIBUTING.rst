@@ -6,13 +6,15 @@ to MLflow locally.
 Prerequisites
 -------------
 
-We recommend installing MLflow in its own virtualenv for development, as follows::
+We recommend installing MLflow in its own conda environment for development, as follows:
 
-    virtualenv env
-    source env/bin/activate
+.. code:: bash
+
+    conda create --name mlflow-dev-env
+    source activate mlflow-dev-env
     pip install -r dev-requirements.txt
-    pip install -r tox-requirements.txt
-    pip install -e .
+    pip install -r test-requirements.txt
+    pip install -e .  # installs mlflow from current checkout
 
 
 ``npm`` is required to run the Javascript dev server.
@@ -24,13 +26,13 @@ Install Node Modules
 Before running the Javascript dev server or building a distributable wheel, install Javascript
 dependencies via:
 
-.. code::
+.. code:: bash
 
    cd mlflow/server/js
    npm install
    cd - # return to root repository directory
 
-If modifying dependencies in ``mlflow/server/js/package.json``, run `npm update` within
+If modifying dependencies in ``mlflow/server/js/package.json``, run ``npm update`` within
 ``mlflow/server/js`` to install the updated dependencies.
 
 
@@ -44,12 +46,16 @@ Alternatively, you can generate the necessary files in ``mlflow/server/js/build`
 
 Tests and Lint
 --------------
-Please verify that the unit tests & linter pass before submitting a pull request by running:
+Verify that the unit tests & linter pass before submitting a pull request by running:
 
-.. code::
+.. code:: bash
 
     pytest
     ./lint.sh
+
+When running ``pytest --requires-ssh`` it is necessary that passwordless SSH access to localhost
+is available. This can be achieved by adding the SSH public key to authorized keys:
+``cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys``.
 
 
 Running the Javascript Dev Server
@@ -58,13 +64,13 @@ Running the Javascript Dev Server
 
 In one shell:
 
-.. code::
+.. code:: bash
 
    mlflow ui
 
 In another shell:
 
-.. code::
+.. code:: bash
 
    cd mlflow/server/js
    npm start
@@ -77,24 +83,28 @@ Building a Distributable Artifact
 
 Generate JS files in ``mlflow/server/js/build``:
 
-.. code::
+.. code:: bash
 
    cd mlflow/server/js
    npm run build
 
 Build a pip-installable wheel in ``dist/``:
 
-.. code::
+.. code:: bash
 
    cd -
    python setup.py bdist_wheel
+
+Building Protobuf Files
+------------------------
+To build protobuf files, simply run ``generate-protos.sh``. The required ``protoc`` version is ``3.6.0``.
 
 
 Writing Docs
 ------------
 Install the necessary Python dependencies via ``pip install -r dev-requirements.txt``. Then run
 
-.. code::
+.. code:: bash
 
    cd docs
    make livehtml
